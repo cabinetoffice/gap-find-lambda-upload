@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  gap-lambda-upload
+
+  Lambda to handle GAP uploads after Trend Micro virus scan
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+    Environment:
+      Variables:
+        ATTACHMENT_HOST: http://localhost:8081
+        ATTACHMENT_KEY: abcd1234
+        CLEAN_BUCKET: gap-sandbox-attachments
+        QUARANTINE_BUCKET: gap-sandbox-quarantine
+
+Resources:
+  UploadFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: upload_function
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Architectures:
+        - x86_64
+      Events:
+        UploadFunction:
+          Type: SNS # More info about SNS Event Source: https://github.com/aws/serverless-application-model/blob/master/versions/2016-10-31.md#sns
+          Properties:
+            Topic: arn:aws:sns:eu-west-2:801347364784:gap-ScanResultTopic-73056510 # Cloud One FFS scan result topic - how to inject this?
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  UploadFunction:
+    Description: "GAP Upload Lambda Function ARN"
+    Value: !GetAtt UploadFunction.Arn
+  UploadFunctionIamRole:
+    Description: "Implicit IAM Role created for GAP Upload function"
+    Value: !GetAtt UploadFunctionRole.Arn

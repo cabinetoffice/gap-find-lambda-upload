@@ -1,0 +1,106 @@
+name: Push Image Workflow
+
+on:
+  create:
+  push:
+    branches:
+      - release/**
+      - develop
+    paths-ignore:
+      - "*.md"
+
+env:
+  AWS_REGION: eu-west-2
+  PYTHON_VERSION: 3.8
+  ECR_REPO_NAME: gap-lambda-upload
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # Need to check here as create event can't be filtered by branch name...
+    if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release')
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install Python Virtual ENV        
+        run: pip3 install virtualenv 
+          
+      - name: Activate and install Depencies into Virtual env          
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          python -m pip install --upgrade pip
+          pip3 install -r upload_function/requirements.txt        
+        if: steps.cache-venv.outputs.cache-hit != 'true'  
+          
+      - name: Lint with flake8
+        run: |
+          pip3 install flake8 
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --filename=upload_function --filename=tests
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --filename=upload_function --filename=tests
+          
+      - name: Test with pytest
+        run: |
+          pip3 install flake8 pytest
+          if [ -f tests/requirements.txt ]; then pip install -r tests/requirements.txt; fi
+          pytest
+
+  imageBuild:
+    needs: build
+
+    environment: AWS
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # Fetch all commits since we use the total commit count to determine the build version
+          fetch-depth: 0
+
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Determine & set BUILD_VERSION
+        run: |
+          GIT_COUNT=$(git rev-list $GITHUB_SHA --count)
+          echo "BUILD_VERSION=b_$GIT_COUNT" >> $GITHUB_ENV
+          echo BUILD_VERSION is ${{ env.BUILD_VERSION }}
+
+      - name: Build, tag and push Docker image to AWS ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build --tag $ECR_REGISTRY/${{ env.ECR_REPO_NAME }}:${{ env.BUILD_VERSION }} .
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO_NAME }}:${{ env.BUILD_VERSION }}
+
+      - name: Create env tag
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          ENV_TAG=${{ (github.ref == 'refs/heads/develop' && 'develop') || (startsWith(github.ref, 'refs/heads/release') && 'qa') }}
+          docker tag $ECR_REGISTRY/${{ env.ECR_REPO_NAME }}:${{ env.BUILD_VERSION }} $ECR_REGISTRY/${{ env.ECR_REPO_NAME }}:$ENV_TAG
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO_NAME }}:$ENV_TAG
+
+      - name: Create release tag - if we are committing to a release branch
+        if: ${{ startsWith(github.ref, 'refs/heads/release/') }}
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          RELEASE_VERSION=V_${GITHUB_REF##*/}
+          docker tag $ECR_REGISTRY/${{ env.ECR_REPO_NAME }}:${{ env.BUILD_VERSION }} $ECR_REGISTRY/${{ env.ECR_REPO_NAME }}:$RELEASE_VERSION
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO_NAME }}:$RELEASE_VERSION

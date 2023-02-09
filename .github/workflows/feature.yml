@@ -1,0 +1,54 @@
+name: Python Lambda CI
+
+on:
+  push:
+    branches:
+      - feature/**
+      - AFG-**
+      - bug/**
+      - GAP-**
+  pull_request:
+    branches:
+      - feature/**
+      - AFG-**
+      - bug/**
+      - GAP-**
+
+env:
+  PYTHON_VERSION: 3.8
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install Python Virtual ENV        
+        run: pip3 install virtualenv 
+          
+      - name: Activate and install Depencies into Virtual env          
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          python -m pip install --upgrade pip
+          pip3 install -r upload_function/requirements.txt        
+        if: steps.cache-venv.outputs.cache-hit != 'true'  
+          
+      - name: Lint with flake8
+        run: |
+          pip3 install flake8 
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --filename=upload_function --filename=tests
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --filename=upload_function --filename=tests
+          
+      - name: Test with pytest
+        run: |
+          pip3 install flake8 pytest
+          if [ -f tests/requirements.txt ]; then pip install -r tests/requirements.txt; fi
+          pytest
