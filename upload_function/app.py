@@ -18,12 +18,16 @@ QUARANTINE_BUCKET = os.environ.get('QUARANTINE_BUCKET')
 
 ATTACHMENT_HOST = os.environ.get('ATTACHMENT_HOST')
 ATTACHMENT_KEY = os.environ.get('ATTACHMENT_KEY')
-ATTACHMENT_TIMEOUT = int(os.environ.get('ATTACHMENT_TIMEOUT', 10))  # default value of 10 seconds
+# default value of 10 seconds
+ATTACHMENT_TIMEOUT = int(os.environ.get('ATTACHMENT_TIMEOUT', 10))
 ATTACHMENT_URL = "/submissions/{}/question/{}/attachment/scanresult"
 
 S3_DOMAIN_PATTERN = r's3(\..+)?\.amazonaws.com'
 
-CONTENT_HEADERS = {"Content-Type": "application/json"}
+API_SECRET = os.environ.get('API_SECRET')
+
+HEADERS = {"Content-Type": "application/json",
+           "Authorization": API_SECRET}
 
 
 def parse_s3_object_url(url_string) -> str:
@@ -45,7 +49,8 @@ def parse_s3_object_url(url_string) -> str:
 def parse_pathname(fullpath: str) -> object:
     sections = fullpath.split('/')
     if len(sections) != 4:
-        logger.error("Could not identify Application ID, Subscription ID, Question ID and filename from: %s", fullpath)
+        logger.error(
+            "Could not identify Application ID, Subscription ID, Question ID and filename from: %s", fullpath)
         return "", ""
 
     application_id: str = sections[0]
@@ -76,7 +81,7 @@ def update_attachment(subscription_id: str, question_id: str, pathname: str, is_
     logger.debug("Passing request to %s", endpoint)
 
     try:
-        response = requests.put(endpoint, json={'uri': pathname, 'isClean': is_clean}, headers=CONTENT_HEADERS,
+        response = requests.put(endpoint, json={'uri': pathname, 'isClean': is_clean}, headers=HEADERS,
                                 timeout=ATTACHMENT_TIMEOUT)
         response.raise_for_status()
         logger.info("Successful Update: Subscription: %s, Question: %s, Pathname: %s, Clean: %s",
@@ -116,4 +121,5 @@ def lambda_handler(event, context):
         new_location = s3_location(is_clean, pathname)
 
         if subscription_id:
-            update_attachment(subscription_id, question_id, new_location, is_clean)
+            update_attachment(subscription_id, question_id,
+                              new_location, is_clean)
