@@ -2,7 +2,7 @@ import unittest
 from unittest import TestCase, mock
 import urllib.parse
 
-from upload_function.app import parse_s3_object_url, parse_pathname, clean_result, s3_location, encrypt_secret
+from upload_function.app import parse_s3_object_url, parse_pathname, clean_result, s3_location
 
 GOOD_ENCODED_PATHNAME: str = "1/81ccea53-9d35-4acf-8cdb-883dfe22e9e9/273acbe3-c937-496e-86f8-f5a0166843c3/" \
                              "2022-07-08%20Grant%20Application%20Definition%20-%20Definition%20-" \
@@ -93,14 +93,6 @@ class S3LocationTests(TestCase):
         location = s3_location(False, "path")
         self.assertIn("bad", location)
 
-class EncryptionTests(TestCase):
-
-    def test_encryption_returns_string(self):
-        secret = "secret"
-        key ='MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwA9Z7o0z3DYfB+NiqnXCzCoPwDMARvL6gmbELeW9pmVIT1ZJY4u7PL9CGP2HTpKVVHlULRFEYWt1KZnMt0p+7zjmVwxYSVkrZNLOV0hWO6ej9EfLyIKduiNL1lmSN94yTgt0NbU8nIaUzkOWxf321ER/Ru/QMlmX+nLJfF0z1s4oarfY7mIdgPSrPcwgaHsyvuiYjZFKoph23CAu3335ZudZ//HEiWxo2+nRjltCelBLHCVpsCk+Rbfp38RNEfDvjFC4wzzosH65cQ2KyFKdyOOiqUO447zmHNh15CD/+g0kxgjyZSIWMkPFrEf+x66ruTRisYOObKdUezLpos+jXQIDAQAB';
-        result = encrypt_secret(secret, key)
-        self.assertIsInstance(result, str)
-        self.assertNotEqual(secret, result)
 
 if __name__ == '__main__':
     unittest.main()

@@ -5,10 +5,6 @@ import re
 import urllib.parse
 import requests
 from requests.exceptions import Timeout, HTTPError, RequestException
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.backends import default_backend
-import base64
 
 # useful for more indepth debugging
 # import http
@@ -29,19 +25,9 @@ ATTACHMENT_URL = "/submissions/{}/question/{}/attachment/scanresult"
 S3_DOMAIN_PATTERN = r's3(\..+)?\.amazonaws.com'
 
 API_SECRET = os.environ.get('API_SECRET')
-API_PUBLIC_KEY = os.environ.get('API_PUBLIC_KEY')
 
-def encrypt_secret(secret, public_key):
-  # Load the public key
-  public_key_with_begin_and_end = f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
-  public_key_bytes = public_key_with_begin_and_end.encode('utf-8')
-  public_key = serialization.load_pem_public_key(public_key_bytes,
-                                                 backend=default_backend())
-
-  encrypted_bytes = public_key.encrypt(secret.encode('utf-8'),
-                                       padding.PKCS1v15())
-
-  return base64.b64encode(encrypted_bytes).decode('utf-8')
+HEADERS = {"Content-Type": "application/json",
+           "Authorization": API_SECRET}
 
 
 def parse_s3_object_url(url_string) -> str:
@@ -93,8 +79,7 @@ def update_attachment(subscription_id: str, question_id: str, pathname: str, is_
     url: str = ATTACHMENT_URL.format(subscription_id, question_id)
     endpoint: str = str(ATTACHMENT_HOST) + url
     logger.debug("Passing request to %s", endpoint)
-    HEADERS = {"Content-Type": "application/json",
-           "Authorization": encrypt_secret(API_SECRET, API_PUBLIC_KEY)}
+
     try:
         response = requests.put(endpoint, json={'uri': pathname, 'isClean': is_clean}, headers=HEADERS,
                                 timeout=ATTACHMENT_TIMEOUT)
@@ -118,6 +103,7 @@ def update_attachment(subscription_id: str, question_id: str, pathname: str, is_
 def s3_location(is_clean: bool, pathname: str) -> str:
     bucket = CLEAN_BUCKET if is_clean else QUARANTINE_BUCKET
     return "s3://" + bucket + "/" + pathname
+
 
 def lambda_handler(event, context):
     logger.debug("Received event: %s", json.dumps(event, indent=2))
