@@ -24,7 +24,8 @@
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -347,3 +348,6 @@ $RECYCLE.BIN/
 # IntelliJ and PyCharm workspace
 .idea
 
+### Local properties ###
+application-local.properties
+.env.local
